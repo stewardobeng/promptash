@@ -1,0 +1,231 @@
+# =====================================================
+# Promptash - Production .htaccess Configuration
+# Optimized for shared hosting environments
+# =====================================================
+
+RewriteEngine On
+
+# =====================================================
+# INSTALLATION REDIRECT
+# =====================================================
+# Redirect to installation if not installed
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/install/
+RewriteCond %{DOCUMENT_ROOT}/config/database.php !-f
+RewriteRule ^(.*)$ install/index.php [L,R=302]
+
+# =====================================================
+# PRETTY URLS & ROUTING
+# =====================================================
+# Pretty URLs for application pages
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/install/
+RewriteRule ^([^/]+)/?$ index.php?page=$1 [L,QSA]
+
+# =====================================================
+# SECURITY CONFIGURATION
+# =====================================================
+
+# Deny access to sensitive files and directories
+<FilesMatch "\.(sql|log|bak|backup|old|tmp|temp|env|git|svn)$">
+    Require all denied
+</FilesMatch>
+
+# Protect configuration files
+<FilesMatch "^(config|database|settings)\.php$">
+    Require all denied
+</FilesMatch>
+
+# Protect sensitive directories
+RedirectMatch 403 ^/config/.*$
+RedirectMatch 403 ^/helpers/.*$
+RedirectMatch 403 ^/scripts/.*$
+RedirectMatch 403 ^/install/.*$ 
+
+# Exception: Allow install directory only if database.php doesn't exist
+RewriteCond %{REQUEST_URI} ^/install/
+RewriteCond %{DOCUMENT_ROOT}/config/database.php -f
+RewriteRule ^(.*)$ - [F,L]
+
+# Prevent access to dot files (except .well-known for SSL)
+<FilesMatch "^\.(htaccess|htpasswd|gitignore|env|git)">
+    Require all denied
+</FilesMatch>
+
+# Block suspicious user agents
+RewriteCond %{HTTP_USER_AGENT} (libwww|wget|python|nikto|scan|java|winhttp|HTTrack|clshttp|archiver|loader|email|harvest|extract|grab|miner) [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} (<|>|'|"|%0A|%0D|%27|%3C|%3E|%00) [NC,OR]
+RewriteCond %{HTTP_USER_AGENT} ^$ [NC]
+RewriteRule .* - [F,L]
+
+# Block common attack patterns
+RewriteCond %{QUERY_STRING} (\||\;|\`|\~|<|>|\[|\]|\{|\}|\||\\|x00|%00|127\.0|localhost|loopback|%0A|%0D) [NC,OR]
+RewriteCond %{QUERY_STRING} (cmd|exec|concat|union|select|insert|cast|set|declare|drop|update|md5|benchmark) [NC,OR]
+RewriteCond %{QUERY_STRING} (sp_executesql|sp_makewebtask|xp_cmdshell|xp_vdirlist|xp_regread) [NC,OR]
+RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
+RewriteCond %{QUERY_STRING} GLOBALS(=|\[|%[0-9A-Z]{0,2}) [OR]
+RewriteCond %{QUERY_STRING} _REQUEST(=|\[|%[0-9A-Z]{0,2}) [OR]
+RewriteCond %{QUERY_STRING} ^.*\=\(\'|\"\).* [OR]
+RewriteCond %{QUERY_STRING} ^.*(\(|\)|\<|\>).* [OR]
+RewriteCond %{QUERY_STRING} ^.*\x00.* [NC]
+RewriteRule .* - [F,L]
+
+# Block WordPress-specific attacks (even though this isn't WordPress)
+RewriteCond %{REQUEST_URI} (wp-admin|wp-login|wp-config|wp-content|wp-includes) [NC]
+RewriteRule .* - [F,L]
+
+# Rate limiting for login attempts (basic)
+<FilesMatch "login\.php|register\.php">
+    # Limit concurrent connections
+    <RequireAll>
+        Require all granted
+        # Add rate limiting rules if supported by host
+    </RequireAll>
+</FilesMatch>
+
+# Allow .well-known directory for SSL certificates
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteRule ^(\.well-known/.*)$ - [L]
+
+# Prevent directory browsing
+Options -Indexes
+
+# Disable server signature
+ServerSignature Off
+
+# =====================================================
+# PHP SECURITY SETTINGS
+# =====================================================
+
+# Disable PHP execution in upload directories (if any)
+<FilesMatch "^(uploads|assets)/.*\.(php|phtml|php3|php4|php5|php6)$">
+    Require all denied
+</FilesMatch>
+
+# =====================================================
+# PERFORMANCE OPTIMIZATION
+# =====================================================
+
+# Set default charset
+AddDefaultCharset UTF-8
+
+# Enable compression (if mod_deflate is available)
+<IfModule mod_deflate.c>
+    # Compress HTML, CSS, JavaScript, Text, XML and fonts
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/vnd.ms-fontobject
+    AddOutputFilterByType DEFLATE application/x-font
+    AddOutputFilterByType DEFLATE application/x-font-opentype
+    AddOutputFilterByType DEFLATE application/x-font-otf
+    AddOutputFilterByType DEFLATE application/x-font-truetype
+    AddOutputFilterByType DEFLATE application/x-font-ttf
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE font/opentype
+    AddOutputFilterByType DEFLATE font/otf
+    AddOutputFilterByType DEFLATE font/ttf
+    AddOutputFilterByType DEFLATE image/svg+xml
+    AddOutputFilterByType DEFLATE image/x-icon
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/xml
+    
+    # Remove browser bugs (only needed for really old browsers)
+    BrowserMatch ^Mozilla/4 gzip-only-text/html
+    BrowserMatch ^Mozilla/4\.0[678] no-gzip
+    BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
+    Header append Vary User-Agent
+</IfModule>
+
+# =====================================================
+# CACHING HEADERS
+# =====================================================
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Assets with long cache times
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType application/x-javascript "access plus 1 year"
+    
+    # Images
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType image/vnd.microsoft.icon "access plus 1 year"
+    
+    # Fonts
+    ExpiresByType application/vnd.ms-fontobject "access plus 1 year"
+    ExpiresByType font/ttf "access plus 1 year"
+    ExpiresByType font/otf "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+    
+    # Other files
+    ExpiresByType application/pdf "access plus 1 month"
+    ExpiresByType text/plain "access plus 1 month"
+    
+    # HTML and dynamic content
+    ExpiresByType text/html "access plus 1 hour"
+    ExpiresByType application/xhtml+xml "access plus 1 hour"
+</IfModule>
+
+# =====================================================
+# SECURITY HEADERS
+# =====================================================
+
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options nosniff
+    
+    # Enable XSS protection
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Prevent clickjacking
+    Header always set X-Frame-Options SAMEORIGIN
+    
+    # Referrer policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Remove server information
+    Header unset Server
+    Header unset X-Powered-By
+    
+    # HSTS (only enable if using HTTPS)
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+</IfModule>
+
+# =====================================================
+# ERROR PAGES (Optional)
+# =====================================================
+
+# Custom error pages (uncomment if you create these files)
+# ErrorDocument 404 /404.html
+# ErrorDocument 403 /403.html
+# ErrorDocument 500 /500.html
+
+# =====================================================
+# SHARED HOSTING COMPATIBILITY
+# =====================================================
+
+# Some shared hosts require this for proper PHP execution
+<IfModule mod_suphp.c>
+    suPHP_ConfigPath /home/yourdomain/public_html
+</IfModule>
+
+# Force HTTPS (uncomment when SSL is set up)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+

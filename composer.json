@@ -1,0 +1,20 @@
+{
+    "name": "promptash/app",
+    "description": "A self-hosted application for managing prompts and other content.",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "lbuchs/webauthn": "^2.0"
+    },
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Your Name",
+            "email": "your@email.com"
+        }
+    ],
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist"
+    }
+}

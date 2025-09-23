@@ -1,0 +1,77 @@
+﻿# Database Configuration
+config/database.php
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+error.log
+access.log
+
+# Cache files
+cache/
+tmp/
+temp/
+
+# Session files
+sessions/
+
+# Uploads (if any)
+uploads/
+user_uploads/
+
+# Backup files
+backups/
+*.bak
+*.backup
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Composer
+vendor/
+
+# Node modules (if using any frontend tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+build/
+
+# Test files (keep documentation but exclude test scripts)
+test_*.php
+debug_*.php
+
+# Temporary files
+*.tmp
+*.temp
+
+# Security keys and sensitive data
+keys/
+secrets/
+*.key
+*.pem
+
+# Development scripts that shouldn't be in production
+setup_local_dev.php
+test_local_connection.php
