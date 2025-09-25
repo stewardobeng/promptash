@@ -749,3 +749,9 @@ h6 { font-size: 1rem; }
 .table-responsive {
     overflow: visible;
 }
+
+/* Responsive table for user management */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
