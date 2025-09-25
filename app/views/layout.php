@@ -188,7 +188,7 @@
                         <i class="fas fa-users-cog"></i> <span>Manage Users</span>
                     </a>
                     <a href="index.php?page=security_logs" class="<?php echo $page === 'security_logs' ? 'active' : ''; ?>" data-tooltip="Security Logs">
-                        <i class="fas fa-shield-halved"></i> <span>Security Logs</span>
+                        <i class="fas fa-shield-alt"></i> <span>Security Logs</span>
                     </a>
                     <a href="index.php?page=admin_backup" class="<?php echo $page === 'admin_backup' ? 'active' : ''; ?>" data-tooltip="System Backup">
                         <i class="fas fa-server"></i> <span>System Backup</span>
