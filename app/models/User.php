@@ -509,6 +509,76 @@ class User {
             return ['created' => 0, 'errors' => ['Database error: ' . $exception->getMessage()]];
         }
     }
+
+    /**
+     * Generate a temporary login token for a user.
+     */
+    public function generateLoginToken($user_id) {
+        try {
+            $token = bin2hex(random_bytes(32));
+            $expires_at = date('Y-m-d H:i:s', strtotime('+5 minutes'));
+
+            $query = "UPDATE " . $this->table_name . " 
+                     SET login_token = :token, login_token_expires_at = :expires_at 
+                     WHERE id = :user_id";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':token', $token);
+            $stmt->bindParam(':expires_at', $expires_at);
+            $stmt->bindParam(':user_id', $user_id);
+            
+            if ($stmt->execute()) {
+                return $token;
+            }
+            return null;
+        } catch (Exception $e) {
+            error_log("Generate login token error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Validate a login token and return the user if valid.
+     */
+    public function validateLoginToken($token) {
+        try {
+            $query = "SELECT * FROM " . $this->table_name . " 
+                     WHERE login_token = :token AND login_token_expires_at > NOW()";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':token', $token);
+            $stmt->execute();
+            
+            $user = $stmt->fetch();
+
+            if ($user) {
+                // Invalidate the token after use
+                $this->invalidateLoginToken($user['id']);
+                return $user;
+            }
+            return null;
+        } catch (PDOException $e) {
+            error_log("Validate login token error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Invalidate the login token for a user.
+     */
+    private function invalidateLoginToken($user_id) {
+        try {
+            $query = "UPDATE " . $this->table_name . " 
+                     SET login_token = NULL, login_token_expires_at = NULL 
+                     WHERE id = :user_id";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id);
+            $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("Invalidate login token error: " . $e->getMessage());
+        }
+    }
     
     // =====================================================
     // MEMBERSHIP TIER METHODS
