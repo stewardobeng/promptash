@@ -10,7 +10,31 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' ry='2' fill='%230066ab'/%3E%3Ctext x='8' y='11' font-family='Arial' font-size='10' text-anchor='middle' fill='white'%3EP%3C/text%3E%3C/svg%3E">
     <link href="assets/css/style.css?v=<?php echo time() . '_no_theme'; ?>" rel="stylesheet">
     
-
+    <style>
+        .login-as-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffc107; /* Bootstrap's warning yellow */
+            color: #000;
+            text-align: center;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 1056; /* Higher than Bootstrap's navbars */
+            border-bottom: 2px solid #e0a800;
+        }
+        .login-as-banner a {
+            color: #000;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        /* When banner is active, add padding to the body to push everything down */
+        body.login-as-active {
+            padding-top: 45px;
+        }
+    </style>
     <script>
         localStorage.removeItem('theme');
         // Remove any existing theme toggle buttons on page load
@@ -47,8 +71,16 @@
             observer.observe(document.body, { childList: true, subtree: true });
         });
     </script>
-<body>
-    <div class="sidebar" id="sidebar">
+</head>
+<body class="<?php echo $auth->isLoginAs() ? 'login-as-active' : ''; ?>">
+<?php if ($auth->isLoginAs()): ?>
+    <div class="login-as-banner">
+        <i class="fas fa-exclamation-triangle"></i>
+        You are currently logged in as <strong><?php echo htmlspecialchars($auth->getCurrentUser()['username']); ?></strong>. 
+        <a href="index.php?page=revert_login_as">Return to your Admin account</a>.
+    </div>
+<?php endif; ?>
+<div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h4><i class="fas fa-magic"></i> <span><?php echo htmlspecialchars(isset($appSettings) && $appSettings !== null ? $appSettings->getAppName() : 'Promptash'); ?></span></h4>
         </div>
@@ -155,20 +187,20 @@
                     <a href="index.php?page=backup" class="<?php echo $page === 'backup' ? 'active' : ''; ?>" data-tooltip="Backup & Restore">
                         <i class="fas fa-download"></i> <span>Backup & Restore</span>
                     </a>
-                     <?php
-                    // Show upgrade link for free users
-                    $current_user = $auth->getCurrentUser();
-                    if (isset($current_user['current_tier_id'])) {
-                        require_once __DIR__ . '/../models/MembershipTier.php';
-                        $membershipModel = new MembershipTier();
-                        $userTier = $membershipModel->getTierById($current_user['current_tier_id']);
-                        if ($userTier && $userTier['name'] === 'free') {
-                            echo '<a href="index.php?page=upgrade" class="' . ($page === 'upgrade' ? 'active' : '') . '" data-tooltip="Upgrade to Premium">';
-                            echo '<i class="fas fa-crown text-warning"></i> <span>Upgrade to Premium</span>';
-                            echo '</a>';
-                        }
-                    }
-                    ?>
+                       <?php
+                       // Show upgrade link for free users
+                       $current_user = $auth->getCurrentUser();
+                       if (isset($current_user['current_tier_id'])) {
+                           require_once __DIR__ . '/../models/MembershipTier.php';
+                           $membershipModel = new MembershipTier();
+                           $userTier = $membershipModel->getTierById($current_user['current_tier_id']);
+                           if ($userTier && $userTier['name'] === 'free') {
+                               echo '<a href="index.php?page=upgrade" class="' . ($page === 'upgrade' ? 'active' : '') . '" data-tooltip="Upgrade to Premium">';
+                               echo '<i class="fas fa-crown text-warning"></i> <span>Upgrade to Premium</span>';
+                               echo '</a>';
+                           }
+                       }
+                       ?>
                 </div>
             </div>
             
@@ -290,7 +322,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="assets/js/app.js?v=<?php echo time() . '_no_theme'; ?>"></script>
-    <?php if ($auth->isAdmin()): ?>
+    <?php if ($auth->isOriginallyAdmin()): // Use isOriginallyAdmin to load js for admin ?>
     <script src="assets/js/user-management.js"></script>
     <?php endif; ?>
 
