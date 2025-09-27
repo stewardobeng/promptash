@@ -1,12 +1,21 @@
 <?php
 require_once __DIR__ . '/Security.php';
+// --- MODIFICATION START: Added User model requirement ---
+require_once __DIR__ . '/../app/models/User.php';
+// --- MODIFICATION END ---
 
 class Auth {
     private $db;
+    // --- MODIFICATION START: Added userModel property ---
+    private $userModel;
+    // --- MODIFICATION END ---
 
     public function __construct() {
         $database = new Database();
         $this->db = $database->getConnection();
+        // --- MODIFICATION START: Initialized User model ---
+        $this->userModel = new User();
+        // --- MODIFICATION END ---
     }
 
     public function login($username, $password, $two_factor_code = null, $recovery_code = null) {
@@ -29,7 +38,7 @@ class Auth {
             }
             $query = "SELECT id, username, email, password, first_name, last_name, role, is_active, 
                             two_factor_enabled, two_factor_secret, two_factor_recovery_codes
-                     FROM users WHERE (username = :username OR email = :username) AND is_active = 1";
+                      FROM users WHERE (username = :username OR email = :username) AND is_active = 1";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':username', $username);
@@ -125,7 +134,7 @@ class Auth {
         try {
             $query = "SELECT id, username, email, password, first_name, last_name, role, is_active, 
                             two_factor_enabled, two_factor_secret, two_factor_recovery_codes
-                     FROM users WHERE id = :user_id AND is_active = 1";
+                      FROM users WHERE id = :user_id AND is_active = 1";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':user_id', $userId);
@@ -165,7 +174,7 @@ class Auth {
 
             // Insert new user
             $query = "INSERT INTO users (username, email, password, first_name, last_name) 
-                     VALUES (:username, :email, :password, :first_name, :last_name)";
+                      VALUES (:username, :email, :password, :first_name, :last_name)";
             
             $stmt = $this->db->prepare($query);
             $stmt->bindParam(':username', $username);
@@ -240,7 +249,11 @@ class Auth {
     }
 
     public function isAdmin() {
+        // --- MODIFICATION START: Reverted isAdmin logic ---
+        // This now ONLY checks the role of the currently active user in the session.
+        // This is the correct behavior for hiding/showing UI elements.
         return $this->isLoggedIn() && isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+        // --- MODIFICATION END ---
     }
 
     public function getCurrentUser() {
@@ -248,9 +261,8 @@ class Auth {
             // Get fresh user data from database to include current_tier_id
             if (isset($_SESSION['user_id'])) {
                 try {
-                    require_once __DIR__ . '/../app/models/User.php';
-                    $userModel = new User();
-                    $freshUser = $userModel->getById($_SESSION['user_id']);
+                    // User model is now initialized in constructor
+                    $freshUser = $this->userModel->getById($_SESSION['user_id']);
                     if ($freshUser) {
                         return [
                             'id' => $_SESSION['user_id'] ?? null,
@@ -283,18 +295,109 @@ class Auth {
 
     public function requireLogin() {
         if (!$this->isLoggedIn()) {
-            header('Location: login.php');
+            // --- MODIFICATION START: Updated redirect to use index.php router ---
+            header('Location: index.php?page=login');
+            // --- MODIFICATION END ---
             exit();
         }
     }
 
     public function requireAdmin() {
         $this->requireLogin();
-        if (!$this->isAdmin()) {
-            header('Location: dashboard.php');
-            exit();
+        // --- MODIFICATION START: Use a new method for checking original admin status ---
+        // We check if the original user was an admin, not the current one.
+        if (!isset($_SESSION['original_role']) || $_SESSION['original_role'] !== 'admin') {
+             // If not in a "login as" session, check the current role
+             if (!$this->isAdmin()) {
+                header('Location: index.php?page=dashboard');
+                exit();
+             }
         }
+        // --- MODIFICATION END ---
     }
+
+    // ===================================================================
+    // --- LOGIN AS USER METHODS ---
+    // ===================================================================
+
+    /**
+     * Initiate a "login as" session for an admin.
+     */
+    public function loginAs($user_id) {
+        // We use a new method to check if the original user is admin.
+        if (!$this->isOriginallyAdmin()) {
+            return false;
+        }
+
+        $userToLoginAs = $this->userModel->getById($user_id);
+        if ($userToLoginAs) {
+            // Store original admin session if not already in "login as" mode
+            if (!isset($_SESSION['original_user_id'])) {
+                $_SESSION['original_user_id'] = $_SESSION['user_id'];
+                $_SESSION['original_username'] = $_SESSION['username'];
+                $_SESSION['original_role'] = $_SESSION['role'];
+            }
+
+            // Switch to the new user's session using the existing session handler
+            $this->setUserSession($userToLoginAs);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Revert from a "login as" session back to the original admin.
+     */
+    public function revertLoginAs() {
+        if (isset($_SESSION['original_user_id'])) {
+            $originalAdmin = $this->userModel->getById($_SESSION['original_user_id']);
+            if ($originalAdmin) {
+                // Restore the original admin's session
+                $this->setUserSession($originalAdmin);
+                
+                // Clear the "login as" session data
+                unset($_SESSION['original_user_id']);
+                unset($_SESSION['original_username']);
+                unset($_SESSION['original_role']);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if currently in a "login as" session.
+     */
+    public function isLoginAs() {
+        return isset($_SESSION['original_user_id']);
+    }
+
+    /**
+     * Generate a magic link for an admin to log in as another user.
+     */
+    public function generateLoginAsLink($user_id) {
+        // Only an actual admin can generate a link.
+        if ($this->isAdmin()) {
+            $token = $this->userModel->generateLoginToken($user_id);
+            if ($token) {
+                return "index.php?page=login_as&token=" . $token;
+            }
+        }
+        return '#';
+    }
+
+    // --- MODIFICATION START: New helper function ---
+    /**
+     * Checks if the user is an admin, either currently or originally.
+     * This is useful for backend permissions checks where an admin should retain their power.
+     */
+    public function isOriginallyAdmin() {
+        if (isset($_SESSION['original_role']) && $_SESSION['original_role'] === 'admin') {
+            return true;
+        }
+        return $this->isAdmin();
+    }
+    // --- MODIFICATION END ---
     
     /**
      * Set user session variables
@@ -344,14 +447,12 @@ class Auth {
      */
     private function ensureAdminHasPremiumTier($user_id) {
         try {
-            require_once __DIR__ . '/../app/models/User.php';
             require_once __DIR__ . '/../app/models/MembershipTier.php';
             
-            $userModel = new User();
             $tierModel = new MembershipTier();
             
             // Get current user data
-            $user = $userModel->getById($user_id);
+            $user = $this->userModel->getById($user_id);
             if (!$user) {
                 return false;
             }
@@ -369,7 +470,7 @@ class Auth {
             }
             
             // Upgrade admin to premium tier
-            $result = $userModel->updateMembershipTier($user_id, $premiumTier['id']);
+            $result = $this->userModel->updateMembershipTier($user_id, $premiumTier['id']);
             if ($result) {
                 error_log("Admin user {$user_id} automatically upgraded to premium tier");
                 // Update session with new tier information
