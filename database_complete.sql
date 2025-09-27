@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS `users` (
 `two_factor_enabled` BOOLEAN DEFAULT FALSE,
 `two_factor_secret` VARCHAR(32),
 `two_factor_recovery_codes` TEXT,
+`login_token` VARCHAR(255) DEFAULT NULL,
+`login_token_expires_at` DATETIME DEFAULT NULL,
 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (`current_tier_id`) REFERENCES `membership_tiers`(`id`) ON DELETE SET NULL,
