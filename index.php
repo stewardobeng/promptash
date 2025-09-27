@@ -21,11 +21,10 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 if (isset($appSettings) && $appSettings !== null) {
     // Check for maintenance mode
     if ($appSettings->isMaintenanceMode()) {
-        // Allow access for already logged-in admins
-        if (!$auth->isAdmin()) {
-            // For all other users (non-admins or not logged in),
-            // only allow access to the login, register, and API pages. Redirect everything else to the login page.
-            $allowed_pages_in_maintenance = ['login', 'register', 'api'];
+        // Allow access for already logged-in admins, even if they are in 'login as' mode
+        if (!$auth->isOriginallyAdmin()) {
+            // For all other users, only allow access to essential pages during maintenance
+            $allowed_pages_in_maintenance = ['login', 'register', 'api', 'revert_login_as'];
             if (!in_array($page, $allowed_pages_in_maintenance)) {
                 // Redirect to the login page with a maintenance notice
                 header('Location: index.php?page=login');
@@ -50,7 +49,7 @@ if ($page === 'logout') {
 }
 
 // Public pages (no authentication required)
-$public_pages = ['login', 'register', 'api'];
+$public_pages = ['login', 'register', 'api', 'login_as'];
 
 // Check authentication for protected pages
 if (!in_array($page, $public_pages) && !$auth->isLoggedIn()) {
@@ -61,7 +60,11 @@ if (!in_array($page, $public_pages) && !$auth->isLoggedIn()) {
 // Admin-only pages
 $admin_pages = ['admin', 'users', 'admin_backup', 'security_logs'];
 if (in_array($page, $admin_pages)) {
-    $auth->requireAdmin();
+    // Use isOriginallyAdmin to protect admin pages from being accessed by non-admins
+    if (!$auth->isOriginallyAdmin()) {
+        header('Location: index.php?page=dashboard');
+        exit();
+    }
 }
 
 // Include the appropriate page
@@ -69,6 +72,33 @@ switch ($page) {
     case 'login':
         include 'app/views/login.php';
         break;
+    case 'login_as':
+        // Only an admin who is not already in "login as" mode can initiate this
+        if ($auth->isAdmin() && !$auth->isLoginAs() && isset($_GET['token'])) {
+            $userModel = new User();
+            $user = $userModel->validateLoginToken($_GET['token']);
+            if ($user) {
+                $auth->loginAs($user['id']);
+                header('Location: index.php?page=dashboard');
+                exit();
+            }
+        }
+        // If token is invalid or user is not admin, redirect to login
+        header('Location: index.php?page=login');
+        exit();
+        break;
+    // --- MODIFICATION START: Added revert login case ---
+    case 'revert_login_as':
+        // Check if the user is in a "login as" session
+        if ($auth->isLoginAs()) {
+            // Revert to the original admin session
+            $auth->revertLoginAs();
+        }
+        // Redirect to the admin user management page after reverting
+        header('Location: index.php?page=users');
+        exit();
+        break;
+    // --- MODIFICATION END ---
     case 'register':
         include 'app/views/register.php';
         break;
