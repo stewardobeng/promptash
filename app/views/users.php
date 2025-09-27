@@ -203,6 +203,9 @@ ob_start();
                                 <td>
                                     <div class="btn-group" role="group">
                                         <?php if ($user['id'] != $auth->getCurrentUser()['id']): ?>
+                                            <a href="<?php echo $auth->generateLoginAsLink($user['id']); ?>" class="btn btn-sm btn-outline-secondary" title="Log in as <?php echo htmlspecialchars($user['username']); ?>">
+                                                <i class="fas fa-sign-in-alt"></i>
+                                            </a>
                                             <?php 
                                             // Use the same premium check logic as the display
                                             $isPremiumUser = false;
