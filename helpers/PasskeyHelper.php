@@ -5,7 +5,6 @@ use lbuchs\WebAuthn\Binary\ByteBuffer;
 use lbuchs\WebAuthn\WebAuthn;
 use lbuchs\WebAuthn\WebAuthnException;
 
-
 class PasskeyHelper {
     private $webAuthn;
     private $db;
@@ -17,15 +16,20 @@ class PasskeyHelper {
         $this->ensureSchema();
 
         $rpName = 'Promptash';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $host = strtolower(explode(':', $host)[0]);
-        $host = ltrim($host, '.');
-        $rpId = preg_replace('/^www\./', '', $host);
 
-        // Enable base64url encoding for challenge / credential data.
+        // Use the domain from the configuration file. This is the key to ensuring consistency.
+        if (!defined('APP_DOMAIN')) {
+            throw new Exception('APP_DOMAIN is not defined in config/config.php. This is required for Passkey authentication.');
+        }
+        $rpId = APP_DOMAIN;
+
+        // --- CORRECTED INITIALIZATION ---
+        // The library is initialized with the Relying Party (your app) name,
+        // the Relying Party ID (your domain), and a final parameter to enable
+        // base64url encoding for challenges. The origin checks are handled
+        // internally by the library during processCreate() and processGet().
         $this->webAuthn = new WebAuthn($rpName, $rpId, null, true);
     }
-
 
     private function ensureSchema() {
         try {
@@ -117,7 +121,6 @@ class PasskeyHelper {
             $excludeCredentialIds
         );
 
-        // Only the publicKey options are needed on the client.
         return $args->publicKey;
     }
 
@@ -280,7 +283,6 @@ class PasskeyHelper {
         return $this->formatPasskeyRow($row);
     }
 
-
     public function processAuthentication($clientDataJSON, $challenge) {
         $payload = json_decode($clientDataJSON, true);
         if (!is_array($payload)) {
@@ -395,5 +397,3 @@ class PasskeyHelper {
     }
 }
 ?>
-
-
