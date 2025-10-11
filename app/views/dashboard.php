@@ -13,10 +13,12 @@ $videoModel = new Video();
 // Initialize membership models
 require_once __DIR__ . '/../models/MembershipTier.php';
 require_once __DIR__ . '/../models/UsageTracker.php';
+require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../../helpers/NotificationService.php';
 $membershipModel = new MembershipTier();
 $usageTracker = new UsageTracker();
 $notificationService = new NotificationService();
+$userModel = new User();
 
 // Check for usage notifications when user visits dashboard
 $notificationService->checkAndSendUsageNotifications($user['id']);
@@ -27,13 +29,13 @@ $usageSummary = $usageTracker->getUserUsageSummary($user['id']);
 // Provide fallback data if usage summary is empty
 if (empty($usageSummary) || !isset($usageSummary['tier']) || !isset($usageSummary['usage'])) {
     // Get basic tier information as fallback
-    $freeTier = $membershipModel->getTierByName('free');
+    $personalTier = $membershipModel->getTierByName('personal');
     $usageSummary = [
-        'tier' => $freeTier ?: [
+        'tier' => $personalTier ?: [
             'id' => 1,
-            'name' => 'free',
-            'display_name' => 'Free',
-            'description' => 'Basic plan'
+            'name' => 'personal',
+            'display_name' => 'Personal Plan',
+            'description' => 'Essential tools for individual creators'
         ],
         'usage' => [
             'prompt_creation' => [
@@ -88,6 +90,23 @@ if (empty($usageSummary) || !isset($usageSummary['tier']) || !isset($usageSummar
     ];
 }
 
+// Determine subscription and trial status
+$activeSubscription = $userModel->getActiveSubscription($user['id']);
+$trialDaysRemaining = null;
+if ($activeSubscription && $activeSubscription['status'] === 'trial' && !empty($activeSubscription['expires_at'])) {
+    try {
+        $expiry = new DateTime($activeSubscription['expires_at']);
+        $now = new DateTime();
+        if ($expiry > $now) {
+            $trialDaysRemaining = (int)$now->diff($expiry)->format('%a');
+        } else {
+            $trialDaysRemaining = 0;
+        }
+    } catch (Exception $e) {
+        $trialDaysRemaining = null;
+    }
+}
+
 // Get statistics
 $totalPrompts = $promptModel->getCountByUserId($user['id']);
 $totalBookmarks = $bookmarkModel->getCountByUserId($user['id']); 
@@ -117,16 +136,24 @@ ob_start();
                                 </div>
                             <?php endif; ?>
                             <div>
-                                <h5 class="mb-1">
-                                    <?php echo htmlspecialchars($usageSummary['tier']['display_name'] ?? 'Free'); ?> Member
-                                    <?php if (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'premium'): ?>
-                                        <span class="badge bg-warning text-dark ms-2">Premium</span>
+                                <h5 class="mb-1 d-flex flex-wrap align-items-center gap-2">
+                                    <?php echo htmlspecialchars($usageSummary['tier']['display_name'] ?? 'Personal Plan'); ?> Member
+                                    <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                                        <span class="badge bg-secondary">Personal</span>
+                                        <span class="badge bg-info text-dark">
+                                            <i class="fas fa-hourglass-half"></i>
+                                            <?php echo $trialDaysRemaining === null ? 'Trial active' : ($trialDaysRemaining . ' day' . ($trialDaysRemaining === 1 ? '' : 's') . ' left'); ?>
+                                        </span>
+                                    <?php elseif (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'premium'): ?>
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-crown"></i> Premium</span>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary ms-2">Free</span>
+                                        <span class="badge bg-secondary">Personal</span>
                                     <?php endif; ?>
                                 </h5>
-                                <?php if (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'free'): ?>
-                                    <p class="text-muted mb-0">Upgrade to unlock unlimited prompts and advanced features</p>
+                                <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                                    <p class="text-muted mb-0">Personal trial active. Activate your plan now to keep everything after the trial ends.</p>
+                                <?php elseif (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'personal'): ?>
+                                    <p class="text-muted mb-0">Upgrade to unlock unlimited prompts and advanced features.</p>
                                 <?php else: ?>
                                     <p class="text-muted mb-0">Thank you for being a Premium member!</p>
                                 <?php endif; ?>
@@ -158,7 +185,16 @@ ob_start();
                                 </div>
                             </div>
                             <div class="col-4">
-                                <?php if (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'free'): ?>
+                                <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                                    <div class="d-grid gap-2">
+                                        <a href="index.php?page=checkout&plan=personal" class="btn btn-success btn-sm">
+                                            <i class="fas fa-credit-card"></i> Activate Personal
+                                        </a>
+                                        <a href="index.php?page=upgrade" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-crown"></i> Upgrade Premium
+                                        </a>
+                                    </div>
+                                <?php elseif (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'personal'): ?>
                                     <a href="index.php?page=upgrade" class="btn btn-primary btn-sm">
                                         <i class="fas fa-arrow-up"></i> Upgrade
                                     </a>
@@ -173,7 +209,12 @@ ob_start();
                     </div>
                 </div>
                 
-                <?php if (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'free'): ?>
+                <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Trial in progress:</strong> Enjoy full access for the next <?php echo $trialDaysRemaining === null ? 'few' : $trialDaysRemaining; ?> day<?php echo ($trialDaysRemaining === 1 ? '' : 's'); ?>. Activate the Personal plan anytime to keep everything active.
+                    </div>
+                <?php elseif (!isset($usageSummary['tier']['name']) || $usageSummary['tier']['name'] === 'personal'): ?>
                     <?php
                     $showWarning = false;
                     $warningMessage = '';

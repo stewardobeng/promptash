@@ -1,7 +1,20 @@
 <?php
+// Settings page should be accessible to all logged-in users
+if (!$auth->isLoggedIn()) {
+    header('Location: index.php?page=login');
+    exit();
+}
+
 $user = $auth->getCurrentUser();
+if (!$user) {
+    // If we can't get user data, redirect to login
+    header('Location: index.php?page=login');
+    exit();
+}
+
 $error = '';
 $success = '';
+
 
 // Initialize models
 $settingsModel = new UserSettings();
@@ -18,15 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // OpenAI configuration is now managed by admin
                 $error = 'AI configuration is now managed by the administrator. Please contact your admin to enable AI features.';
                 break;
-                
+
             case 'save_ai_preferences':
                 // AI preferences are now centrally managed by admin
                 $error = 'AI preferences are now managed by the administrator. Please contact your admin for AI configuration.';
                 break;
-                
+
             case 'save_app_settings':
-                // Only allow admin users to modify app settings
-                if ($user['role'] !== 'admin') {
+                // Only allow admin users to modify app settings - use isOriginallyAdmin for consistent permission checking
+                if (!$auth->isOriginallyAdmin()) {
                     $error = 'Access denied. Only administrators can modify app settings.';
                     break;
                 }
@@ -124,11 +137,11 @@ try {
 if (!$usageSummary || !isset($usageSummary['tier'])) {
     $usageSummary = [
         'tier' => [
-            'name' => 'free',
-            'display_name' => 'Free Plan',
-            'price_annual' => 0,
-            'price_monthly' => 0,
-            'features' => ['Basic prompt management', 'Limited AI generations'],
+            'name' => 'personal',
+            'display_name' => 'Personal Plan',
+            'price_annual' => 150,
+            'price_monthly' => 15,
+            'features' => ['Personal workspace', 'Standard AI generations'],
             'max_ai_generations_per_month' => 50
         ],
         'usage' => [
@@ -147,15 +160,15 @@ if (!$usageSummary || !isset($usageSummary['tier'])) {
 if (!$allTiers || empty($allTiers)) {
     $allTiers = [
         [
-            'name' => 'free',
-            'display_name' => 'Free Plan',
-            'description' => 'Perfect for getting started',
-            'is_free' => true,
+            'name' => 'personal',
+            'display_name' => 'Personal Plan',
+            'description' => 'Built for individual creators who need to stay organised',
+            'is_free' => false,
             'is_premium' => false,
-            'price_annual' => 0,
-            'price_monthly' => 0,
+            'price_annual' => 150,
+            'price_monthly' => 15,
             'limits' => ['prompts' => '50', 'ai_generations' => '50', 'categories' => '5', 'bookmarks' => '50', 'notes' => '50', 'documents' => '20', 'videos' => '30'],
-            'features' => ['Basic prompt management', 'Limited AI generations']
+            'features' => ['Personal workspace', 'Standard AI generations']
         ],
         [
             'name' => 'premium',
@@ -163,17 +176,34 @@ if (!$allTiers || empty($allTiers)) {
             'description' => 'For power users and professionals',
             'is_free' => false,
             'is_premium' => true,
-            'price_annual' => 10,
-            'price_monthly' => 2,
+            'price_annual' => 400,
+            'price_monthly' => 35,
             'limits' => ['prompts' => 'Unlimited', 'ai_generations' => '300', 'categories' => 'Unlimited', 'bookmarks' => 'Unlimited', 'notes' => '250', 'documents' => '150', 'videos' => '200'],
             'features' => ['Unlimited prompts', 'Enhanced AI generations', 'Priority support']
         ]
     ];
 }
 
+// Subscription details
+$activeSubscription = $userModel->getActiveSubscription($user['id']);
+$trialDaysRemaining = null;
+if ($activeSubscription && $activeSubscription['status'] === 'trial' && !empty($activeSubscription['expires_at'])) {
+    try {
+        $expiry = new DateTime($activeSubscription['expires_at']);
+        $now = new DateTime();
+        if ($expiry > $now) {
+            $trialDaysRemaining = (int)$now->diff($expiry)->format('%a');
+        } else {
+            $trialDaysRemaining = 0;
+        }
+    } catch (Exception $e) {
+        $trialDaysRemaining = null;
+    }
+}
+
 // Get app settings for admin users
 $app_settings = [];
-if ($user['role'] === 'admin') {
+if ($auth->isOriginallyAdmin()) {
     try {
         require_once __DIR__ . '/../models/AppSettings.php';
         $appSettingsModel = new AppSettings();
@@ -250,36 +280,54 @@ $page_title = 'Settings';
         <div class="row">
             <div class="col-md-6">
                 <h6><i class="fas fa-user-tag"></i> Current Plan</h6>
-                <div class="d-flex align-items-center mb-3">
-                    <div class="me-3">
-                        <?php if (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'premium'): ?>
-                            <span class="badge bg-gradient-primary fs-6">
-                                <i class="fas fa-crown me-1"></i> <?php echo htmlspecialchars($usageSummary['tier']['display_name'] ?? 'Premium'); ?>
-                            </span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary fs-6">
-                                <i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($usageSummary['tier']['display_name'] ?? 'Free Plan'); ?>
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge <?php echo (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'premium') ? 'bg-gradient-primary' : 'bg-secondary'; ?> fs-6">
+                            <i class="fas <?php echo (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'premium') ? 'fa-crown' : 'fa-user'; ?> me-1"></i>
+                            <?php echo htmlspecialchars($usageSummary['tier']['display_name'] ?? 'Personal Plan'); ?>
+                        </span>
+                        <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                            <span class="badge bg-info text-dark fs-6">
+                                <i class="fas fa-hourglass-half"></i>
+                                <?php echo $trialDaysRemaining === null ? 'Trial active' : ($trialDaysRemaining . ' day' . ($trialDaysRemaining === 1 ? '' : 's') . ' left'); ?>
                             </span>
                         <?php endif; ?>
                     </div>
-                    <?php if (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'free'): ?>
-                        <a href="index.php?page=upgrade" class="btn btn-primary btn-sm">
-                            <i class="fas fa-arrow-up"></i> Upgrade to Premium
-                        </a>
-                    <?php endif; ?>
+                    <div class="ms-auto d-flex flex-wrap gap-2">
+                        <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                            <a href="index.php?page=checkout&plan=personal" class="btn btn-success btn-sm">
+                                <i class="fas fa-credit-card"></i> Activate Personal Plan
+                            </a>
+                            <a href="index.php?page=upgrade" class="btn btn-primary btn-sm">
+                                <i class="fas fa-crown"></i> Upgrade to Premium
+                            </a>
+                        <?php elseif (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'personal'): ?>
+                            <a href="index.php?page=upgrade" class="btn btn-primary btn-sm">
+                                <i class="fas fa-arrow-up"></i> Upgrade to Premium
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
-                
-                <?php if (isset($usageSummary['tier']['price_annual']) && $usageSummary['tier']['price_annual'] > 0): ?>
+
+                <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                    <p class="text-muted mb-3">
+                        <strong>Billing:</strong> Free trial (Personal Plan) &nbsp;•&nbsp;
+                        Expires <?php echo htmlspecialchars(date('M j, Y', strtotime($activeSubscription['expires_at']))); ?>
+                        <?php if ($trialDaysRemaining !== null): ?>
+                            (<?php echo $trialDaysRemaining; ?> day<?php echo $trialDaysRemaining === 1 ? '' : 's'; ?> left)
+                        <?php endif; ?>
+                    </p>
+                <?php elseif (isset($usageSummary['tier']['price_annual']) && $usageSummary['tier']['price_annual'] > 0): ?>
                     <?php 
                         require_once __DIR__ . '/../models/AppSettings.php';
                         $appSettings = new AppSettings();
                     ?>
                     <p class="text-muted mb-3">
                         <strong>Billing:</strong> <?php echo $appSettings->formatPrice($usageSummary['tier']['price_annual']); ?>/year
-                        </p>
+                    </p>
                 <?php else: ?>
                     <p class="text-muted mb-3">
-                        <strong>Billing:</strong> Free Plan
+                        <strong>Billing:</strong> Personal Plan
                     </p>
                 <?php endif; ?>
                 
@@ -310,6 +358,13 @@ $page_title = 'Settings';
                         <?php endif; ?>
                     </ul>
                 </div>
+
+                <?php if ($activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Your Personal trial is active. Activate the plan now to keep all prompts, categories, and history once the trial ends.
+                    </div>
+                <?php endif; ?>
             </div>
             
             <div class="col-md-6">
@@ -490,7 +545,7 @@ $page_title = 'Settings';
             </div>
         </div>
         
-        <?php if (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'free'): ?>
+        <?php if (isset($usageSummary['tier']['name']) && $usageSummary['tier']['name'] === 'personal'): ?>
             <div class="alert alert-info mt-3">
                 <i class="fas fa-info-circle"></i>
                 <strong>Ready to unlock more?</strong> 
@@ -500,7 +555,7 @@ $page_title = 'Settings';
                         $appSettings = new AppSettings();
                     }
                 ?>
-                Upgrade to Premium for unlimited prompts, 300 AI generations per month, and advanced features starting at just <?php echo $appSettings->formatPrice(100); ?>/year!
+                Upgrade to Premium for unlimited prompts, 300 AI generations per month, and advanced features starting at just <?php echo $appSettings->formatPrice(400); ?>/year!
             </div>
         <?php endif; ?>
     </div>
@@ -531,8 +586,8 @@ $page_title = 'Settings';
                             <div class="card-body text-center">
                                 <div class="mb-3">
                                     <?php if ($tier['is_free'] ?? false): ?>
-                                        <h3 class="text-primary">Free</h3>
-                                        <small class="text-muted">Forever</small>
+                                        <h3 class="text-primary">Included</h3>
+                                        <small class="text-muted">No billing required</small>
                                     <?php else: ?>
                                         <?php 
                                             if (!isset($appSettings)) {
@@ -614,7 +669,16 @@ $page_title = 'Settings';
                                 </ul>
                             </div>
                             <div class="card-footer text-center">
-                                <?php if (($tier['name'] ?? '') === ($usageSummary['tier']['name'] ?? '')): ?>
+                                <?php if (($tier['name'] ?? '') === ($usageSummary['tier']['name'] ?? '') && $activeSubscription && $activeSubscription['status'] === 'trial'): ?>
+                                    <div class="d-grid gap-2">
+                                        <a href="index.php?page=checkout&plan=personal" class="btn btn-success">
+                                            <i class="fas fa-credit-card"></i> Activate Personal Plan
+                                        </a>
+                                        <a href="index.php?page=upgrade" class="btn btn-primary">
+                                            <i class="fas fa-crown"></i> Upgrade to Premium
+                                        </a>
+                                    </div>
+                                <?php elseif (($tier['name'] ?? '') === ($usageSummary['tier']['name'] ?? '')): ?>
                                     <button class="btn btn-outline-secondary" disabled>
                                         <i class="fas fa-check"></i> Current Plan
                                     </button>
@@ -623,9 +687,9 @@ $page_title = 'Settings';
                                         <i class="fas fa-crown"></i> Upgrade Now
                                     </a>
                                 <?php else: ?>
-                                    <button class="btn btn-outline-secondary" disabled>
-                                        Free Plan
-                                    </button>
+                                    <a href="index.php?page=checkout&plan=personal" class="btn btn-outline-secondary">
+                                        Personal Plan
+                                    </a>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -642,7 +706,7 @@ $page_title = 'Settings';
     </div>
 </div>
 
-<?php if ($user['role'] === 'admin'): ?>
+<?php if ($auth->isOriginallyAdmin()): ?>
 <div class="card mb-4">
     <div class="card-header">
         <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Application Settings</h5>

@@ -91,15 +91,15 @@ try {
     require_once __DIR__ . '/../app/models/UsageTracker.php';
     $usageTracker = new UsageTracker();
     
-    // Test with a free tier user
-    $freeTier = $tierModel->getFreeTier();
-    if ($freeTier) {
-        echo "\n📊 Free tier limits test:\n";
-        echo "   Prompts: " . $tierModel->getTierLimit($freeTier['id'], 'prompt_creation') . "\n";
-        echo "   AI Generations: " . $tierModel->getTierLimit($freeTier['id'], 'ai_generation') . "\n";
-        echo "   Categories: " . $tierModel->getTierLimit($freeTier['id'], 'category_creation') . "\n";
+    // Test with a personal tier user
+    $personalTier = $tierModel->getPersonalTier();
+    if ($personalTier) {
+        echo "\n📊 Personal tier limits test:\n";
+        echo "   Prompts: " . $tierModel->getTierLimit($personalTier['id'], 'prompt_creation') . "\n";
+        echo "   AI Generations: " . $tierModel->getTierLimit($personalTier['id'], 'ai_generation') . "\n";
+        echo "   Categories: " . $tierModel->getTierLimit($personalTier['id'], 'category_creation') . "\n";
         
-        $isUnlimited = $tierModel->getTierLimit($freeTier['id'], 'prompt_creation') == 0;
+        $isUnlimited = $tierModel->getTierLimit($personalTier['id'], 'prompt_creation') == 0;
         echo "   Is prompts unlimited? " . ($isUnlimited ? "Yes (❌ Wrong!)" : "No (✅ Correct!)") . "\n";
     }
     
@@ -109,7 +109,7 @@ try {
     echo "   Categories: " . $tierModel->getTierLimit($premiumTier['id'], 'category_creation') . " (0 = unlimited)\n";
     
     echo "\n✅ Usage limit calculation fix has been applied!\n";
-    echo "   Free users will now see proper limits (50 prompts, 50 AI generations, 5 categories)\n";
+    echo "   Personal plan members will now see proper limits (50 prompts, 50 AI generations, 5 categories)\n";
     echo "   Premium users will see unlimited for prompts/categories, 300 for AI generations\n";
     
 } catch (Exception $e) {

@@ -1,4 +1,85 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../helpers/CheckoutHelper.php';
+require_once __DIR__ . '/../models/MembershipTier.php';
+
+$checkoutHelper = new CheckoutHelper();
+$membershipModel = new MembershipTier();
+
+$token = $_GET['token'] ?? ($_SESSION['registration_token'] ?? null);
+if (!$token) {
+    $_SESSION['checkout_error'] = 'Please choose a plan to continue your registration.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+try {
+    $pendingCheckout = $checkoutHelper->getByToken($token);
+} catch (Exception $e) {
+    $_SESSION['checkout_error'] = 'Unable to verify your checkout session. Please select a plan again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+if (!$pendingCheckout) {
+    $_SESSION['checkout_error'] = 'Registration link expired or invalid. Please choose a plan again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+// Ensure token is still valid
+if (!empty($pendingCheckout['expires_at']) && strtotime($pendingCheckout['expires_at']) < time()) {
+    $checkoutHelper->expireToken($token);
+    $_SESSION['checkout_error'] = 'Your registration link has expired. Please choose a plan again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+if ($pendingCheckout['status'] === 'pending') {
+    $_SESSION['checkout_error'] = 'Payment is still pending. Please complete checkout before registering.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+if ($pendingCheckout['status'] === 'completed') {
+    $_SESSION['checkout_error'] = 'This registration link has already been used. Please sign in or choose a new plan.';
+    header('Location: index.php?page=login');
+    exit();
+}
+
+if ($pendingCheckout['status'] === 'expired') {
+    $_SESSION['checkout_error'] = 'Your registration link has expired. Please choose a plan again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+$isTrial = (int)$pendingCheckout['is_trial'] === 1;
+if ($isTrial && $pendingCheckout['status'] !== 'authorized') {
+    $_SESSION['checkout_error'] = 'The free trial could not be confirmed. Please start a new trial.';
+    header('Location: index.php?page=checkout&plan=personal&trial=1');
+    exit();
+}
+
+if (!$isTrial && $pendingCheckout['status'] !== 'paid') {
+    $_SESSION['checkout_error'] = 'Payment could not be verified. Please try checkout again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+$_SESSION['registration_token'] = $token;
+
+$selectedTier = $membershipModel->getTierByName($pendingCheckout['plan_name']);
+if (!$selectedTier) {
+    $_SESSION['checkout_error'] = 'Selected plan is no longer available. Please choose a plan again.';
+    header('Location: index.php?page=checkout');
+    exit();
+}
+
+$billingCycle = $pendingCheckout['billing_cycle'];
+
 $error = '';
 $success = '';
 
@@ -13,6 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'action' => 'registration'
         ]);
     } else {
+        $postedToken = $_POST['checkout_token'] ?? '';
+        if ($postedToken !== $token) {
+            $error = 'Registration session mismatch. Please restart the checkout process.';
+        } else {
         $username = trim($_POST['username']);
         $email = trim($_POST['email']);
         $password = $_POST['password'];
@@ -36,17 +121,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$passwordValidation['valid']) {
                 $error = 'Password requirements: ' . implode(', ', $passwordValidation['errors']);
             } else {
-                if ($auth->register($username, $email, $password, $first_name, $last_name)) {
-                    // Log successful registration
-                    Security::logSecurityEvent('user_registered', [
-                        'username' => $username,
-                        'email' => $email,
-                        'ip' => $_SERVER['REMOTE_ADDR']
-                    ]);
-                    
-                    // Redirect to login page with success message
-                    header('Location: index.php?page=login&registration=success&message=' . urlencode('Registration successful! Please login with your credentials.'));
-                    exit();
+                $userId = $auth->register($username, $email, $password, $first_name, $last_name);
+                if ($userId) {
+                    try {
+                        $checkoutHelper->completeRegistration($token, $userId);
+
+                        // Log successful registration
+                        Security::logSecurityEvent('user_registered', [
+                            'username' => $username,
+                            'email' => $email,
+                            'ip' => $_SERVER['REMOTE_ADDR'],
+                            'plan' => $pendingCheckout['plan_name'],
+                            'billing_cycle' => $billingCycle,
+                            'trial' => $isTrial
+                        ]);
+
+                        unset($_SESSION['registration_token']);
+
+                        $message = $isTrial
+                            ? 'Registration successful! Your 7-day Personal trial is active. Please login to get started.'
+                            : 'Registration successful! Please login to access your account.';
+
+                        header('Location: index.php?page=login&registration=success&message=' . urlencode($message));
+                        exit();
+                    } catch (Exception $e) {
+                        require_once __DIR__ . '/../models/User.php';
+                        $userModel = new User();
+                        $userModel->deleteUser($userId);
+                        $error = 'We could not finalise your plan. Please contact support or try again. (' . htmlspecialchars($e->getMessage()) . ')';
+                    }
                 } else {
                     $error = 'Username or email already exists.';
                     Security::logSecurityEvent('registration_failed', [
@@ -56,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
             }
+        }
         }
     }
 }
@@ -156,6 +260,20 @@ if ($auth->isLoggedIn()) {
                     <?php endif; ?>
 
                     <form method="POST">
+                        <input type="hidden" name="checkout_token" value="<?php echo htmlspecialchars($token); ?>">
+                        <div class="alert alert-info d-flex align-items-center gap-2 mb-4">
+                            <i class="fas fa-layer-group fa-lg"></i>
+                            <div>
+                                <strong><?php echo htmlspecialchars($selectedTier['display_name']); ?></strong>
+                                <?php if (!$isTrial): ?>
+                                    <div class="small mb-0">
+                                        Billing: <?php echo ucfirst($billingCycle); ?> &nbsp;•&nbsp; Amount: GHS <?php echo number_format($billingCycle === 'annual' ? $selectedTier['price_annual'] : $selectedTier['price_monthly'], 0); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="small mb-0">7-day Personal Trial · No payment required</div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                         <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                         <div class="row">
                             <div class="col-md-6">

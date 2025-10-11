@@ -33,12 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     break;
                     
-                case 'demote_free':
-                    $freeTier = $membershipModel->getTierByName('free');
-                    if ($freeTier && $userModel->updateMembershipTier($user_id, $freeTier['id'])) {
-                        $success = 'User "' . htmlspecialchars($targetUser['username']) . '" has been demoted to Free membership.';
+                case 'demote_personal':
+                    $personalTier = $membershipModel->getTierByName('personal');
+                    if ($personalTier && $userModel->updateMembershipTier($user_id, $personalTier['id'])) {
+                        $success = 'User "' . htmlspecialchars($targetUser['username']) . '" has been moved to the Personal plan.';
                     } else {
-                        $error = 'Failed to demote user to Free membership.';
+                        $error = 'Failed to switch user to the Personal plan.';
                     }
                     break;
                     
@@ -187,7 +187,7 @@ ob_start();
                                     <?php if ($isPremium): ?>
                                         <span class="badge bg-warning text-dark"><i class="fas fa-crown"></i> Premium</span>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary">Free</span>
+                                        <span class="badge bg-secondary">Personal</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -223,8 +223,8 @@ ob_start();
                                                 </button>
                                             <?php else: ?>
                                                 <button type="button" class="btn btn-sm btn-outline-warning" 
-                                                        onclick="demoteToFree(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>')" 
-                                                        title="Demote to Free">
+                                                        onclick="demoteToPersonal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>')" 
+                                                        title="Move to Personal Plan">
                                                     <i class="fas fa-user-minus"></i>
                                                 </button>
                                             <?php endif; ?>
@@ -272,9 +272,9 @@ function promoteToPremium(userId, username) {
     }
 }
 
-function demoteToFree(userId, username) {
-    if (confirm(`Are you sure you want to demote "${username}" to Free membership?\n\nThis will limit their access to free tier features only.\n\nWarning: This action will immediately restrict their access.`)) {
-        document.getElementById('membershipAction').value = 'demote_free';
+function demoteToPersonal(userId, username) {
+    if (confirm(`Are you sure you want to move "${username}" to the Personal plan?\n\nThey will have access to the individual creator limits for prompts and AI generations.\n\nWarning: This change applies immediately.`)) {
+        document.getElementById('membershipAction').value = 'demote_personal';
         document.getElementById('membershipUserId').value = userId;
         document.getElementById('membershipActionForm').submit();
     }

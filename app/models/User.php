@@ -16,14 +16,14 @@ class User {
                             (
                                 SELECT us.status 
                                 FROM user_subscriptions us 
-                                WHERE us.user_id = u.id AND us.status = 'active' 
+                                WHERE us.user_id = u.id AND us.status IN ('active', 'trial') 
                                 ORDER BY us.created_at DESC 
                                 LIMIT 1
                             ) as subscription_status,
                             (
                                 SELECT us.expires_at 
                                 FROM user_subscriptions us 
-                                WHERE us.user_id = u.id AND us.status = 'active' 
+                                WHERE us.user_id = u.id AND us.status IN ('active', 'trial') 
                                 ORDER BY us.created_at DESC 
                                 LIMIT 1
                             ) as expires_at
@@ -150,14 +150,14 @@ class User {
                             (
                                 SELECT us.status 
                                 FROM user_subscriptions us 
-                                WHERE us.user_id = u.id AND us.status = 'active' 
+                                WHERE us.user_id = u.id AND us.status IN ('active', 'trial') 
                                 ORDER BY us.created_at DESC 
                                 LIMIT 1
                             ) as subscription_status,
                             (
                                 SELECT us.expires_at 
                                 FROM user_subscriptions us 
-                                WHERE us.user_id = u.id AND us.status = 'active' 
+                                WHERE us.user_id = u.id AND us.status IN ('active', 'trial') 
                                 ORDER BY us.created_at DESC 
                                 LIMIT 1
                             ) as expires_at
@@ -600,7 +600,7 @@ class User {
                                 us.status as subscription_status, us.expires_at, us.billing_cycle
                          FROM " . $this->table_name . " u
                          LEFT JOIN membership_tiers mt ON mt.id = u.current_tier_id
-                         LEFT JOIN user_subscriptions us ON us.user_id = u.id AND us.status = 'active'
+                     LEFT JOIN user_subscriptions us ON us.user_id = u.id AND us.status IN ('active', 'trial')
                          WHERE u.id = :id";
             } else {
                 // Use simplified query without subscription info
@@ -667,7 +667,7 @@ class User {
             $query = "SELECT us.*, mt.name as tier_name, mt.display_name as tier_display_name
                      FROM user_subscriptions us
                      JOIN membership_tiers mt ON mt.id = us.tier_id
-                     WHERE us.user_id = :user_id AND us.status = 'active'
+                     WHERE us.user_id = :user_id AND us.status IN ('active', 'trial')
                      ORDER BY us.created_at DESC LIMIT 1";
             
             $stmt = $this->db->prepare($query);
@@ -678,6 +678,39 @@ class User {
         } catch(PDOException $exception) {
             error_log("Get active subscription error: " . $exception->getMessage());
             return null;
+        }
+    }
+
+    public function getLatestSubscription($user_id) {
+        try {
+            $query = "SELECT * FROM user_subscriptions
+                     WHERE user_id = :user_id
+                     ORDER BY created_at DESC LIMIT 1";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id);
+            $stmt->execute();
+            return $stmt->fetch();
+        } catch (PDOException $exception) {
+            error_log("Get latest subscription error: " . $exception->getMessage());
+            return null;
+        }
+    }
+
+    public function expireUserSubscriptions($user_id) {
+        try {
+            $query = "UPDATE user_subscriptions
+                     SET status = 'expired', auto_renew = 0, updated_at = NOW()
+                     WHERE user_id = :user_id
+                     AND status IN ('active', 'trial')
+                     AND expires_at IS NOT NULL
+                     AND expires_at < NOW()";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id);
+            $stmt->execute();
+            return true;
+        } catch (PDOException $exception) {
+            error_log("Expire subscriptions error: " . $exception->getMessage());
+            return false;
         }
     }
     
@@ -724,7 +757,7 @@ class User {
             $stats['users_by_tier'] = $stmt->fetchAll();
             
             // Active subscriptions
-            $query = "SELECT COUNT(*) as count FROM user_subscriptions WHERE status = 'active'";
+            $query = "SELECT COUNT(*) as count FROM user_subscriptions WHERE status IN ('active', 'trial')";
             $stmt = $this->db->prepare($query);
             $stmt->execute();
             $result = $stmt->fetch();
@@ -732,7 +765,7 @@ class User {
             
             // Expiring subscriptions (next 30 days)
             $query = "SELECT COUNT(*) as count FROM user_subscriptions 
-                     WHERE status = 'active' AND expires_at IS NOT NULL 
+                     WHERE status IN ('active', 'trial') AND expires_at IS NOT NULL 
                      AND expires_at <= DATE_ADD(NOW(), INTERVAL 30 DAY)";
             $stmt = $this->db->prepare($query);
             $stmt->execute();
@@ -765,7 +798,7 @@ class User {
                      FROM users u
                      JOIN user_subscriptions us ON us.user_id = u.id
                      JOIN membership_tiers mt ON mt.id = us.tier_id
-                     WHERE us.status = 'active' 
+                     WHERE us.status IN ('active', 'trial') 
                      AND us.expires_at IS NOT NULL
                      AND us.expires_at <= DATE_ADD(NOW(), INTERVAL :days DAY)
                      AND us.expires_at > NOW()

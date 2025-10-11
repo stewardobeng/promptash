@@ -95,11 +95,12 @@ upgrade_existing_user_to_admin (role changes)
 
 ## 🎯 **Membership Plans**
 
-### **Free Plan:**
+### **Personal Plan:**
 - 50 prompts per month
 - 10 AI generations per month  
 - 5 categories total
-- Basic features
+- GH₵15/month or GH₵150/year
+- Essential features for individual creators
 
 ### **Premium Plan:**
 - Unlimited prompts

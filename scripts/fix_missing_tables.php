@@ -26,8 +26,8 @@ try {
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `user_id` INT NOT NULL,
                 `tier_id` INT NOT NULL,
-                `status` ENUM('active', 'expired', 'cancelled', 'pending') DEFAULT 'active',
-                `billing_cycle` ENUM('monthly', 'annual') DEFAULT 'annual',
+                `status` ENUM('pending', 'active', 'trial', 'expired', 'cancelled') DEFAULT 'pending',
+                `billing_cycle` ENUM('monthly', 'annual', 'trial', 'lifetime') DEFAULT 'monthly',
                 `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 `expires_at` TIMESTAMP NULL,
                 `cancelled_at` TIMESTAMP NULL,
@@ -36,13 +36,16 @@ try {
                 `external_subscription_id` VARCHAR(255),
                 `last_payment_at` TIMESTAMP NULL,
                 `next_payment_at` TIMESTAMP NULL,
+                `metadata` JSON DEFAULT NULL,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
                 FOREIGN KEY (`tier_id`) REFERENCES `membership_tiers`(`id`) ON DELETE RESTRICT,
                 INDEX `idx_user_id` (`user_id`),
                 INDEX `idx_tier_id` (`tier_id`),
-                INDEX `idx_status` (`status`)
+                INDEX `idx_status` (`status`),
+                INDEX `idx_expires_at` (`expires_at`),
+                INDEX `idx_next_payment_at` (`next_payment_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ",
         
@@ -65,6 +68,32 @@ try {
                 INDEX `idx_user_id` (`user_id`),
                 INDEX `idx_external_transaction_id` (`external_transaction_id`),
                 INDEX `idx_status` (`status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ",
+
+        'pending_checkouts' => "
+            CREATE TABLE IF NOT EXISTS `pending_checkouts` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `token` VARCHAR(64) NOT NULL UNIQUE,
+                `email` VARCHAR(255) DEFAULT NULL,
+                `plan_name` VARCHAR(50) NOT NULL,
+                `billing_cycle` ENUM('trial', 'monthly', 'annual') NOT NULL DEFAULT 'trial',
+                `is_trial` TINYINT(1) DEFAULT 0,
+                `status` ENUM('pending', 'authorized', 'paid', 'completed', 'expired') DEFAULT 'pending',
+                `amount` DECIMAL(10,2) DEFAULT 0.00,
+                `currency` VARCHAR(3) DEFAULT 'GHS',
+                `paystack_reference` VARCHAR(100) DEFAULT NULL,
+                `metadata` JSON DEFAULT NULL,
+                `payment_data` JSON DEFAULT NULL,
+                `user_id` INT DEFAULT NULL,
+                `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                `expires_at` DATETIME DEFAULT NULL,
+                FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
+                INDEX `idx_token` (`token`),
+                INDEX `idx_status` (`status`),
+                INDEX `idx_plan_name` (`plan_name`),
+                INDEX `idx_created_at` (`created_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ",
         
@@ -114,14 +143,14 @@ try {
         }
     }
     
-    // Create free subscriptions for existing users
-    echo "\n🔧 Creating free subscriptions for existing users...\n";
+    // Create personal plan subscriptions for existing users
+    echo "\n🔧 Creating personal plan subscriptions for existing users...\n";
     try {
         $sql = "INSERT IGNORE INTO `user_subscriptions` (`user_id`, `tier_id`, `status`, `billing_cycle`, `started_at`, `auto_renew`)
-                SELECT `id`, 1, 'active', 'annual', NOW(), FALSE
+                SELECT `id`, 1, 'active', 'monthly', NOW(), FALSE
                 FROM `users`";
         $conn->exec($sql);
-        echo "✅ Free subscriptions created for existing users\n";
+        echo "✅ Personal plan subscriptions created for existing users\n";
     } catch (PDOException $e) {
         echo "ℹ️ Subscription creation: " . $e->getMessage() . "\n";
     }

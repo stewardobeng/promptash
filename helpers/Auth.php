@@ -184,26 +184,26 @@ class Auth {
             $stmt->bindParam(':last_name', $last_name);
 
             if ($stmt->execute()) {
-                $user_id = $this->db->lastInsertId();
-                
+                $user_id = (int)$this->db->lastInsertId();
+
                 // Send welcome notification
                 require_once __DIR__ . '/NotificationService.php';
                 $notificationService = new NotificationService();
-                
+
                 $new_user = [
                     'id' => $user_id,
                     'email' => $email,
                     'first_name' => $first_name,
                     'last_name' => $last_name
                 ];
-                
+
                 $notificationService->sendWelcomeNotification($new_user);
-                
+
                 error_log("Welcome notification sent to new user: {$email}");
-                
-                return true;
+
+                return $user_id;
             }
-            
+
             return false;
         } catch(PDOException $exception) {
             error_log("Registration error: " . $exception->getMessage());
@@ -221,6 +221,63 @@ class Auth {
         }
         
         return true;
+    }
+
+    public function enforceMembershipAccess($currentPage = '') {
+        if (!$this->isLoggedIn()) {
+            return;
+        }
+
+        $exemptPages = ['checkout', 'payment_callback', 'logout', 'upgrade', 'settings', 'register', 'login', 'landing', 'api'];
+        if (in_array($currentPage, $exemptPages, true)) {
+            return;
+        }
+
+        require_once __DIR__ . '/../app/models/User.php';
+        $userModel = new User();
+        $user = $this->getCurrentUser();
+
+        if (!$user) {
+            $this->logout();
+            return;
+        }
+
+        // Administrators always retain full access
+        if ($this->isOriginallyAdmin() || ($user['role'] ?? '') === 'admin') {
+            if (empty($user['current_tier_id'])) {
+                require_once __DIR__ . '/../app/models/MembershipTier.php';
+                $membershipModel = new MembershipTier();
+                $premium = $membershipModel->getPremiumTier();
+                if ($premium) {
+                    $userModel->updateMembershipTier($user['id'], $premium['id']);
+                }
+            }
+            return;
+        }
+
+        $userModel->expireUserSubscriptions($user['id']);
+        $activeSubscription = $userModel->getActiveSubscription($user['id']);
+        if ($activeSubscription) {
+            return;
+        }
+
+        $latestSubscription = $userModel->getLatestSubscription($user['id']);
+        $message = 'Your subscription is inactive. Please choose a plan to continue.';
+        if ($latestSubscription) {
+            if ($latestSubscription['status'] === 'trial') {
+                $message = 'Your Personal trial has ended. Please upgrade to continue.';
+            } elseif ($latestSubscription['status'] === 'expired') {
+                $message = 'Your subscription has expired. Please renew to continue.';
+            }
+        }
+
+        $this->logout();
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        $_SESSION['membership_required'] = $message;
+        header('Location: index.php?page=checkout');
+        exit();
     }
 
     public function isLoggedIn() {

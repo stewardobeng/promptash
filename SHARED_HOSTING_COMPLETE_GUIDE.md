@@ -83,7 +83,7 @@ Your admin account will automatically have premium membership. You can verify th
 - ✅ Password reset functionality
 
 ### **Membership System:**
-- ✅ Free Plan: 50 prompts/month, 10 AI generations, 5 categories
+- ✅ Personal Plan: 50 prompts/month, 10 AI generations, 5 categories
 - ✅ Premium Plan: Unlimited prompts, 500 AI generations, unlimited categories
 - ✅ Usage tracking and limit enforcement
 - ✅ Auto-renewal and payment processing ready

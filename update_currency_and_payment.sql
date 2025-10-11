@@ -15,17 +15,42 @@ INSERT IGNORE INTO `app_settings` (`setting_name`, `setting_value`, `setting_typ
 ('ai_enabled', 'false', 'boolean', 'Enable AI features'),
 ('openrouter_api_key', '', 'string', 'OpenRouter API key for AI features');
 
--- Update premium tier pricing to 100 GHS
+-- Update premium tier pricing to the new Ghana Cedi rates
 UPDATE `membership_tiers` SET 
-    `price_annual` = 100.00,
-    `price_monthly` = 10.00
+    `price_annual` = 400.00,
+    `price_monthly` = 35.00
 WHERE `name` = 'premium';
 
--- Ensure free tier is set correctly 
+-- Ensure personal tier is set correctly 
 UPDATE `membership_tiers` SET 
-    `price_annual` = 0.00,
-    `price_monthly` = 0.00
-WHERE `name` = 'free';
+    `price_annual` = 150.00,
+    `price_monthly` = 15.00
+WHERE `name` = 'personal';
+
+-- Ensure pending_checkouts table exists for pre-registration workflow
+CREATE TABLE IF NOT EXISTS `pending_checkouts` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `token` VARCHAR(64) NOT NULL UNIQUE,
+    `email` VARCHAR(255) DEFAULT NULL,
+    `plan_name` VARCHAR(50) NOT NULL,
+    `billing_cycle` ENUM('trial', 'monthly', 'annual') NOT NULL DEFAULT 'trial',
+    `is_trial` TINYINT(1) DEFAULT 0,
+    `status` ENUM('pending', 'authorized', 'paid', 'completed', 'expired') DEFAULT 'pending',
+    `amount` DECIMAL(10,2) DEFAULT 0.00,
+    `currency` VARCHAR(3) DEFAULT 'GHS',
+    `paystack_reference` VARCHAR(100) DEFAULT NULL,
+    `metadata` JSON DEFAULT NULL,
+    `payment_data` JSON DEFAULT NULL,
+    `user_id` INT DEFAULT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `expires_at` DATETIME DEFAULT NULL,
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
+    INDEX `idx_token` (`token`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_plan_name` (`plan_name`),
+    INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Update any existing payment transactions to use correct currency
 -- (This is safe as it only updates the display currency, not amounts)

@@ -80,12 +80,12 @@ try {
         // Test model functionality
         try {
             $tierModel = new MembershipTier();
-            $freeTier = $tierModel->getFreeTier();
+            $personalTier = $tierModel->getPersonalTier();
             $premiumTier = $tierModel->getPremiumTier();
             
-            if ($freeTier && $premiumTier) {
+            if ($personalTier && $premiumTier) {
                 $success[] = "✅ MembershipTier model: Working correctly";
-                $success[] = "   • Free tier: {$freeTier['display_name']} (ID: {$freeTier['id']})";
+                $success[] = "   • Personal tier: {$personalTier['display_name']} (ID: {$personalTier['id']})";
                 $success[] = "   • Premium tier: {$premiumTier['display_name']} (ID: {$premiumTier['id']})";
             } else {
                 $errors[] = "❌ MembershipTier model: Cannot retrieve tier data";

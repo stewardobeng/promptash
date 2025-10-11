@@ -11,11 +11,12 @@ require_once 'app/models/Bookmark.php';
 require_once 'app/models/Note.php';
 require_once 'app/models/Document.php';
 require_once 'app/models/Video.php';
+require_once 'app/models/MembershipTier.php';
 
 
 // Initialize authentication
 $auth = new Auth();
-$page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
+$page = $_GET['page'] ?? ($auth->isLoggedIn() ? 'dashboard' : 'landing');
 
 // --- MODIFICATION START: Improved Maintenance Mode Logic ---
 if (isset($appSettings) && $appSettings !== null) {
@@ -24,7 +25,7 @@ if (isset($appSettings) && $appSettings !== null) {
         // Allow access for already logged-in admins, even if they are in 'login as' mode
         if (!$auth->isOriginallyAdmin()) {
             // For all other users, only allow access to essential pages during maintenance
-            $allowed_pages_in_maintenance = ['login', 'register', 'api', 'revert_login_as'];
+            $allowed_pages_in_maintenance = ['login', 'register', 'landing', 'checkout', 'api', 'revert_login_as'];
             if (!in_array($page, $allowed_pages_in_maintenance)) {
                 // Redirect to the login page with a maintenance notice
                 header('Location: index.php?page=login');
@@ -49,13 +50,16 @@ if ($page === 'logout') {
 }
 
 // Public pages (no authentication required)
-$public_pages = ['login', 'register', 'api', 'login_as'];
+$public_pages = ['landing', 'checkout', 'login', 'register', 'api', 'login_as'];
 
 // Check authentication for protected pages
 if (!in_array($page, $public_pages) && !$auth->isLoggedIn()) {
     header('Location: index.php?page=login');
     exit();
 }
+
+// Enforce membership or trial status for logged-in users
+$auth->enforceMembershipAccess($page);
 
 // Admin-only pages
 $admin_pages = ['admin', 'users', 'admin_backup', 'security_logs'];
@@ -185,6 +189,17 @@ switch ($page) {
         break;
     case 'api':
         include 'app/views/api.php';
+        break;
+    case 'checkout':
+        require_once 'helpers/CheckoutHelper.php';
+        $membershipModel = new MembershipTier();
+        $publicTiers = $membershipModel->getAllTiers(true);
+        include 'app/views/checkout.php';
+        break;
+    case 'landing':
+        $membershipModel = new MembershipTier();
+        $publicTiers = $membershipModel->getAllTiers(true);
+        include 'app/views/landing.php';
         break;
     default:
         include 'app/views/dashboard.php';

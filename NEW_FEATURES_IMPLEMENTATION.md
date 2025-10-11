@@ -45,7 +45,7 @@
   - Form submission handling for membership changes
 - Added POST request handling for:
   - `promote_premium` - Upgrades user to Premium tier
-  - `demote_free` - Downgrades user to Free tier
+  - `demote_personal` - Moves user to the Personal plan
 - Security measures: Admins cannot modify their own membership
 - Real-time success/error feedback
 

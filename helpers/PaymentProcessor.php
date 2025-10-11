@@ -284,17 +284,33 @@ class PaymentProcessor {
     public function handlePaymentCallback($reference) {
         try {
             $payment = $this->verifyPayment($reference);
-            
+
             if ($payment['status'] === 'success') {
-                $metadata = $payment['metadata'];
+                $metadata = $payment['metadata'] ?? [];
+                $checkoutToken = $metadata['checkout_token'] ?? null;
+
+                if ($checkoutToken) {
+                    require_once __DIR__ . '/CheckoutHelper.php';
+                    $checkoutHelper = new CheckoutHelper();
+                    $amount = isset($payment['amount']) ? $payment['amount'] / 100 : 0;
+                    $currency = $payment['currency'] ?? 'GHS';
+                    $checkoutHelper->markPaymentSuccessful($checkoutToken, $reference, $payment, $amount, $currency);
+
+                    return [
+                        'success' => true,
+                        'message' => 'Payment confirmed',
+                        'checkout_token' => $checkoutToken,
+                    ];
+                }
+
                 $user_id = $metadata['user_id'] ?? null;
                 $tier_id = $metadata['tier_id'] ?? null;
-                
+
                 if ($user_id && $tier_id) {
                     return $this->activatePremiumMembership($user_id, $tier_id, $payment);
                 }
             }
-            
+
             return ['success' => false, 'message' => 'Payment verification failed'];
         } catch (Exception $e) {
             error_log('Payment callback error: ' . $e->getMessage());

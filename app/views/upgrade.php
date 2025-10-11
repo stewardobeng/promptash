@@ -149,7 +149,13 @@ ob_start();
                             </div>
                             <div class="card-body">
                                 <div class="text-center mb-3">
-                                    <h3 class="text-muted">Free</h3>
+                                    <h3 class="text-primary">
+                                        <?php echo $appSettings->formatPrice($currentTier['price_monthly']); ?>
+                                        <small class="text-muted">/month</small>
+                                    </h3>
+                                    <small class="text-muted">
+                                        <?php echo $appSettings->formatPrice($currentTier['price_annual']); ?> billed yearly
+                                    </small>
                                 </div>
                                 <ul class="list-unstyled">
                                     <?php foreach ($currentTier['features'] as $feature): ?>
@@ -302,7 +308,7 @@ ob_start();
                                 </div>
                                 <div id="collapse2" class="collapse" data-parent="#faqAccordion">
                                     <div class="card-body">
-                                        Your existing prompts and categories remain intact. You'll simply be subject to the free tier usage limits for new creations.
+                                        Your existing prompts and categories remain intact. You'll simply be subject to the Personal plan usage limits for new creations.
                                     </div>
                                 </div>
                             </div>

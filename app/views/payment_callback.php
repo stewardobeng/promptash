@@ -17,8 +17,16 @@ try {
         $result = $paymentProcessor->handlePaymentCallback($reference);
         
         if ($result['success']) {
-            // Redirect to success page
             session_start();
+            if (!empty($result['checkout_token'])) {
+                $_SESSION['registration_token'] = $result['checkout_token'];
+                $_SESSION['payment_success'] = true;
+                $_SESSION['payment_message'] = 'Payment confirmed. Complete your registration to activate your account.';
+                header('Location: index.php?page=register&token=' . urlencode($result['checkout_token']));
+                exit();
+            }
+
+            // Redirect to success page for existing members
             $_SESSION['payment_success'] = true;
             $_SESSION['payment_message'] = 'Premium membership activated successfully!';
             header('Location: index.php?page=upgrade&success=1');

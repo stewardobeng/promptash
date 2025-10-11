@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 `last_name` VARCHAR(50) NOT NULL,
 `role` ENUM('admin', 'user') DEFAULT 'user',
 `is_active` BOOLEAN DEFAULT TRUE,
-`current_tier_id` INT DEFAULT 1 COMMENT 'Current membership tier (defaults to free)',
+`current_tier_id` INT DEFAULT 1 COMMENT 'Current membership tier (defaults to personal)',
 `two_factor_enabled` BOOLEAN DEFAULT FALSE,
 `two_factor_secret` VARCHAR(32),
 `two_factor_recovery_codes` TEXT,
@@ -162,8 +162,8 @@ CREATE TABLE IF NOT EXISTS `user_subscriptions` (
 `id` INT AUTO_INCREMENT PRIMARY KEY,
 `user_id` INT NOT NULL,
 `tier_id` INT NOT NULL,
-`status` ENUM('active', 'expired', 'cancelled', 'pending') DEFAULT 'active',
-`billing_cycle` ENUM('monthly', 'annual') DEFAULT 'annual',
+`status` ENUM('pending', 'active', 'trial', 'expired', 'cancelled') DEFAULT 'pending',
+`billing_cycle` ENUM('monthly', 'annual', 'trial', 'lifetime') DEFAULT 'monthly',
 `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 `expires_at` TIMESTAMP NULL,
 `cancelled_at` TIMESTAMP NULL,
@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS `user_subscriptions` (
 `external_subscription_id` VARCHAR(255) COMMENT 'Paystack subscription ID',
 `last_payment_at` TIMESTAMP NULL,
 `next_payment_at` TIMESTAMP NULL,
+`metadata` JSON DEFAULT NULL,
 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
@@ -181,6 +182,31 @@ INDEX `idx_tier_id` (`tier_id`),
 INDEX `idx_status` (`status`),
 INDEX `idx_expires_at` (`expires_at`),
 INDEX `idx_next_payment_at` (`next_payment_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -- CHECKOUT & PRE-REGISTRATION
+CREATE TABLE IF NOT EXISTS `pending_checkouts` (
+`id` INT AUTO_INCREMENT PRIMARY KEY,
+`token` VARCHAR(64) NOT NULL UNIQUE,
+`email` VARCHAR(255) DEFAULT NULL,
+`plan_name` VARCHAR(50) NOT NULL,
+`billing_cycle` ENUM('trial', 'monthly', 'annual') NOT NULL DEFAULT 'trial',
+`is_trial` TINYINT(1) DEFAULT 0,
+`status` ENUM('pending', 'authorized', 'paid', 'completed', 'expired') DEFAULT 'pending',
+`amount` DECIMAL(10,2) DEFAULT 0.00,
+`currency` VARCHAR(3) DEFAULT 'GHS',
+`paystack_reference` VARCHAR(100) DEFAULT NULL,
+`metadata` JSON DEFAULT NULL,
+`payment_data` JSON DEFAULT NULL,
+`user_id` INT DEFAULT NULL,
+`created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+`updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`expires_at` DATETIME DEFAULT NULL,
+FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
+INDEX `idx_token` (`token`),
+INDEX `idx_status` (`status`),
+INDEX `idx_plan_name` (`plan_name`),
+INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `payment_transactions` (
@@ -391,9 +417,9 @@ CREATE TABLE IF NOT EXISTS `passkey_credentials` (
 
 -- -- DEFAULT DATA INSERTION
 INSERT INTO `membership_tiers` (`id`, `name`, `display_name`, `description`, `price_annual`, `price_monthly`, `max_prompts_per_month`, `max_ai_generations_per_month`, `max_categories`, `max_bookmarks`, `max_notes`, `max_documents`, `max_videos`, `features`, `sort_order`) VALUES
-(1, 'free', 'Free Plan', 'Perfect for getting started with prompt management', 0.00, 0.00, 50, 50, 5, 50, 50, 20, 30,
-'[\"Basic prompt management\", \"Standard categories\", \"Community support\"]', 1),
-(2, 'premium', 'Premium Plan', 'Unlock the full power of prompt management', 100.00, 10.00, 0, 300, 0, 0, 250, 150, 200,
+(1, 'personal', 'Personal Plan', 'Built for individual creators who need organised prompt libraries', 150.00, 15.00, 50, 50, 5, 50, 50, 20, 30,
+'["Personal workspace", "Standard categories", "Email support"]', 1),
+(2, 'premium', 'Premium Plan', 'Unlock the full power of prompt management with advanced automation', 400.00, 35.00, 0, 300, 0, 0, 250, 150, 200,
 '[\"Unlimited prompts\", \"300 AI generations/month\", \"Unlimited categories\", \"Advanced search\", \"Export functionality\", \"Priority support\", \"Advanced analytics\", \"Early access to features\"]', 2)
 ON DUPLICATE KEY UPDATE name=VALUES(name);
 
@@ -431,3 +457,10 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+
+
+
+
+
+

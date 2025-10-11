@@ -82,10 +82,17 @@ class MembershipTier {
     }
     
     /**
-     * Get free tier
+     * Get personal tier (default entry-level plan)
+     */
+    public function getPersonalTier() {
+        return $this->getTierByName('personal');
+    }
+    
+    /**
+     * @deprecated Retained for backward compatibility. Use getPersonalTier().
      */
     public function getFreeTier() {
-        return $this->getTierByName('free');
+        return $this->getPersonalTier();
     }
     
     /**

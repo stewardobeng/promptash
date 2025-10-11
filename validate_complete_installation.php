@@ -55,7 +55,7 @@ try {
     
     // Check membership tiers
     echo "\n🔍 Checking membership tiers...\n";
-    $query = "SELECT * FROM membership_tiers WHERE name IN ('free', 'premium')";
+    $query = "SELECT * FROM membership_tiers WHERE name IN ('personal', 'premium')";
     $stmt = $db->prepare($query);
     $stmt->execute();
     $tiers = $stmt->fetchAll();
@@ -63,8 +63,17 @@ try {
     if (count($tiers) >= 2) {
         echo "✅ Membership tiers found: " . count($tiers) . "\n";
         foreach ($tiers as $tier) {
-            $price_display = ($tier['name'] === 'free') ? 'Free' : $appSettings->formatPrice($tier['price_annual']);
-            echo "  - {$tier['display_name']}: {$price_display}/year\n";
+            $annual = (float)$tier['price_annual'];
+            $monthly = (float)$tier['price_monthly'];
+            if ($annual === 0.0 && $monthly === 0.0) {
+                echo "  - {$tier['display_name']}: Free\n";
+            } elseif ($annual > 0.0 && $monthly > 0.0) {
+                echo "  - {$tier['display_name']}: {$appSettings->formatPrice($annual)}/year ({$appSettings->formatPrice($monthly)}/month)\n";
+            } elseif ($annual > 0.0) {
+                echo "  - {$tier['display_name']}: {$appSettings->formatPrice($annual)}/year\n";
+            } else {
+                echo "  - {$tier['display_name']}: {$appSettings->formatPrice($monthly)}/month\n";
+            }
         }
     } else {
         echo "❌ Missing membership tiers\n";

@@ -126,10 +126,10 @@ class UsageTracker {
                 return false;
             }
             
-            // Handle missing current_tier_id by setting default to free tier (ID: 1)
+            // Handle missing current_tier_id by setting default to personal tier (ID: 1)
             $tier_id = $user['current_tier_id'];
             if (!$tier_id) {
-                error_log("User {$user_id} has no current_tier_id, setting to free tier (1)");
+                error_log("User {$user_id} has no current_tier_id, setting to personal tier (1)");
                 $userModel->updateMembershipTier($user_id, 1);
                 $tier_id = 1;
             }
@@ -137,13 +137,13 @@ class UsageTracker {
             $tier = $tierModel->getTierById($tier_id);
             if (!$tier) {
                 error_log("Can perform action error: Tier not found with ID {$tier_id} for user {$user_id}");
-                // Default to free tier limits as fallback
-                $freeTier = $tierModel->getFreeTier();
-                if (!$freeTier) {
-                    error_log("Fatal error: Free tier not found in database");
+                // Default to personal tier limits as fallback
+                $personalTier = $tierModel->getPersonalTier();
+                if (!$personalTier) {
+                    error_log("Fatal error: Personal tier not found in database");
                     return false; // No tiers exist, deny action
                 }
-                $tier = $freeTier;
+                $tier = $personalTier;
             }
             
             // Get tier limit
@@ -217,10 +217,10 @@ class UsageTracker {
                 return 0;
             }
             
-            // Handle missing current_tier_id by setting default to free tier (ID: 1)
+            // Handle missing current_tier_id by setting default to personal tier (ID: 1)
             $tier_id = $user['current_tier_id'];
             if (!$tier_id) {
-                error_log("User {$user_id} has no current_tier_id, setting to free tier (1)");
+                error_log("User {$user_id} has no current_tier_id, setting to personal tier (1)");
                 $userModel->updateMembershipTier($user_id, 1);
                 $tier_id = 1;
             }
@@ -228,13 +228,13 @@ class UsageTracker {
             $tier = $tierModel->getTierById($tier_id);
             if (!$tier) {
                 error_log("Get usage percentage error: Tier not found with ID {$tier_id} for user {$user_id}");
-                // Default to free tier as fallback
-                $freeTier = $tierModel->getFreeTier();
-                if (!$freeTier) {
-                    error_log("Fatal error: Free tier not found in database");
+                // Default to personal tier as fallback
+                $personalTier = $tierModel->getPersonalTier();
+                if (!$personalTier) {
+                    error_log("Fatal error: Personal tier not found in database");
                     return 0;
                 }
-                $tier = $freeTier;
+                $tier = $personalTier;
             }
             
             $limit = $tierModel->getTierLimit($tier['id'], $usage_type);
@@ -310,10 +310,10 @@ class UsageTracker {
                 return [];
             }
             
-            // Handle missing current_tier_id by setting default to free tier (ID: 1)
+            // Handle missing current_tier_id by setting default to personal tier (ID: 1)
             $tier_id = $user['current_tier_id'];
             if (!$tier_id) {
-                error_log("User {$user_id} has no current_tier_id, setting to free tier (1)");
+                error_log("User {$user_id} has no current_tier_id, setting to personal tier (1)");
                 $userModel->updateMembershipTier($user_id, 1);
                 $tier_id = 1;
             }
@@ -321,14 +321,14 @@ class UsageTracker {
             $tier = $tierModel->getTierById($tier_id);
             if (!$tier) {
                 error_log("Get usage summary error: Tier not found with ID {$tier_id} for user {$user_id}");
-                // Default to free tier as fallback
-                $freeTier = $tierModel->getFreeTier();
-                if (!$freeTier) {
-                    error_log("Fatal error: Free tier not found in database");
+                // Default to personal tier as fallback
+                $personalTier = $tierModel->getPersonalTier();
+                if (!$personalTier) {
+                    error_log("Fatal error: Personal tier not found in database");
                     return [];
                 }
-                $tier = $freeTier;
-                // Update user to use free tier
+                $tier = $personalTier;
+                // Update user to use personal tier
                 $userModel->updateMembershipTier($user_id, $tier['id']);
             }
             

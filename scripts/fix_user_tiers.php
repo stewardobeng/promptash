@@ -30,14 +30,14 @@ try {
         
         echo "\nFixing tier assignments...\n";
         
-        // Update users to have free tier (ID: 1)
+        // Update users to have personal plan (tier ID: 1)
         $fixQuery = "UPDATE users SET current_tier_id = 1 WHERE current_tier_id IS NULL OR current_tier_id = 0";
         $fixStmt = $db->prepare($fixQuery);
         $result = $fixStmt->execute();
         
         if ($result) {
             $affectedRows = $fixStmt->rowCount();
-            echo "✅ Successfully updated {$affectedRows} users to free tier (ID: 1)\n";
+        echo "✅ Successfully updated {$affectedRows} users to the Personal plan (tier ID: 1)\n";
         } else {
             echo "❌ Failed to update user tiers\n";
         }
