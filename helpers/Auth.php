@@ -468,19 +468,31 @@ class Auth {
         $_SESSION['email'] = $user['email'] ?? '';
         $_SESSION['first_name'] = $user['first_name'] ?? '';
         $_SESSION['last_name'] = $user['last_name'] ?? '';
-        $_SESSION['role'] = $user['role'] ?? 'user';
+        $_SESSION['role'] = $this->normalizeRole($user['role'] ?? 'user');
         $_SESSION['logged_in'] = true;
         $_SESSION['two_factor_verified'] = true;
         $_SESSION['last_activity'] = time(); // Add activity tracking
         
         // Auto-upgrade admin users to premium tier
-        if (($user['role'] ?? 'user') === 'admin') {
+        if ($this->normalizeRole($user['role'] ?? 'user') === 'admin') {
             $this->ensureAdminHasPremiumTier($user['id']);
         }
         
         // Clear temporary session data
         unset($_SESSION['temp_user_id']);
         unset($_SESSION['temp_username']);
+    }
+    
+    /**
+     * Normalize role values so application logic only has to reason
+     * about "admin" and "user".
+     */
+    private function normalizeRole($role) {
+        $normalized = strtolower(trim((string)$role));
+        if (in_array($normalized, ['admin', 'administrator', 'super_admin'], true)) {
+            return 'admin';
+        }
+        return 'user';
     }
     
     /**

@@ -26,6 +26,15 @@ Security::setSecurityHeaders();
 define('APP_VERSION', '1.0.0'); // Version can remain static for now
 define('APP_URL', 'http://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['SCRIPT_NAME']));
 
+// Derive the relying party domain for passkey support.
+if (!defined('APP_DOMAIN')) {
+    $host = parse_url(APP_URL, PHP_URL_HOST);
+    if (!$host) {
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    }
+    define('APP_DOMAIN', $host);
+}
+
 
 // Security settings
 define('SESSION_LIFETIME', 31536000); // 1 year

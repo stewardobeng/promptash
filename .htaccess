@@ -4,6 +4,7 @@
 # =====================================================
 
 RewriteEngine On
+Options -MultiViews
 
 # =====================================================
 # INSTALLATION REDIRECT
@@ -34,7 +35,7 @@ RewriteRule ^([^/]+)/?$ index.php?page=$1 [L,QSA]
 </FilesMatch>
 
 # Protect configuration files
-<FilesMatch "^(config|database|settings)\.php$">
+<FilesMatch "^(config|database)\.php$">
     Require all denied
 </FilesMatch>
 
@@ -62,7 +63,7 @@ RewriteRule .* - [F,L]
 
 # Block common attack patterns
 RewriteCond %{QUERY_STRING} (\||\;|\`|\~|<|>|\[|\]|\{|\}|\||\\|x00|%00|127\.0|localhost|loopback|%0A|%0D) [NC,OR]
-RewriteCond %{QUERY_STRING} (cmd|exec|concat|union|select|insert|cast|set|declare|drop|update|md5|benchmark) [NC,OR]
+RewriteCond %{QUERY_STRING} (?:^|[^A-Za-z])(cmd|exec|concat|union|select|insert|cast|set|declare|drop|update|md5|benchmark)(?:[^A-Za-z]|$) [NC,OR]
 RewriteCond %{QUERY_STRING} (sp_executesql|sp_makewebtask|xp_cmdshell|xp_vdirlist|xp_regread) [NC,OR]
 RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
 RewriteCond %{QUERY_STRING} GLOBALS(=|\[|%[0-9A-Z]{0,2}) [OR]
