@@ -12,8 +12,15 @@ $page_num = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $limit = 20;
 $offset = ($page_num - 1) * $limit;
 
+// --- MODIFICATION START: Get total count for pagination ---
+$total_items = $bookmarkModel->countByUserId($user['id'], $search);
+$total_pages = ceil($total_items / $limit);
+// --- MODIFICATION END ---
+
 // Get bookmarks based on search
 if ($search) {
+    // Note: The original search method in the model uses MATCH AGAINST, 
+    // while countByUserId uses LIKE. For consistency, we use the original search method.
     $bookmarks = $bookmarkModel->search($user['id'], $search, $limit, $offset);
 } else {
     $bookmarks = $bookmarkModel->getByUserId($user['id'], $limit, $offset);
@@ -233,6 +240,40 @@ ob_start();
     </div>
 <?php endif; ?>
 
+<?php if ($total_pages > 1): ?>
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        <?php
+        // Base URL
+        $base_url = 'index.php?page=bookmarks';
+        if ($search) {
+            $base_url .= '&search=' . htmlspecialchars($search);
+        }
+        
+        // Previous button
+        $prev_page = $page_num - 1;
+        $prev_disabled = ($page_num <= 1) ? 'disabled' : '';
+        echo "<li class='page-item {$prev_disabled}'><a class='page-link' href='{$base_url}&p={$prev_page}'>&laquo;</a></li>";
+
+        // Page numbers
+        $window = 2; // Number of links to show around the current page
+        for ($i = 1; $i <= $total_pages; $i++) {
+            if ($i == 1 || $i == $total_pages || ($i >= $page_num - $window && $i <= $page_num + $window)) {
+                $active = ($i == $page_num) ? 'active' : '';
+                echo "<li class='page-item {$active}'><a class='page-link' href='{$base_url}&p={$i}'>{$i}</a></li>";
+            } elseif ($i == $page_num - $window - 1 || $i == $page_num + $window + 1) {
+                echo "<li class='page-item disabled'><span class='page-link'>...</span></li>";
+            }
+        }
+        
+        // Next button
+        $next_page = $page_num + 1;
+        $next_disabled = ($page_num >= $total_pages) ? 'disabled' : '';
+        echo "<li class='page-item {$next_disabled}'><a class='page-link' href='{$base_url}&p={$next_page}'>&raquo;</a></li>";
+        ?>
+    </ul>
+</nav>
+<?php endif; ?>
 <style>
     /* Custom styles for the list view image */
     .bookmark-image {
